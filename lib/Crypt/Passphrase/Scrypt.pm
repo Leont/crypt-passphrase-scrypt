@@ -34,7 +34,7 @@ sub needs_rehash {
 	my ($cost, $block_size, $parallel, $salt64, $hash64) = $hash =~ $decode_regex or return 1;
 	return 1 if $cost < $self->{cost} or $block_size < $self->{block_size} or $parallel < $self->{parallel};
 	return 1 if length decode_base64($salt64) < $self->{salt_size} or length decode_base64($hash64) < $self->{output_size};
-	return;
+	return 0;
 }
 
 sub crypt_subtypes {
