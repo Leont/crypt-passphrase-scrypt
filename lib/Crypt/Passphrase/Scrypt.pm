@@ -44,8 +44,9 @@ sub crypt_subtypes {
 sub verify_password {
 	my ($class, $password, $hash) = @_;
 	my ($cost, $block_size, $parallel, $salt64, $hash64) = $hash =~ $decode_regex or return 0;
-	my $new_hash = scrypt_raw($password, decode_base64($salt64), 1 << $cost, $block_size, $parallel, length decode_base64($hash64));
-	return $new_hash eq decode_base64($hash64);
+	my $old_hash = decode_base64($hash64);
+	my $new_hash = scrypt_raw($password, decode_base64($salt64), 1 << $cost, $block_size, $parallel, length $old_hash);
+	return $new_hash eq $old_hash;
 }
 
 1;
