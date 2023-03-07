@@ -53,6 +53,10 @@ sub verify_password {
 
 #ABSTRACT: A scrypt encoder for Crypt::Passphrase
 
+=head1 DESCRIPTION
+
+This class implements an scrypt encoder for Crypt::Passphrase. If one wants a memory-hard password scheme Argon2 is recommended instead.
+
 =method new(%args)
 
 This creates a new scrypt encoder, it takes named parameters that are all optional. Note that some defaults are likely to change at some point in the future, as computers get progressively more powerful and cryptoanalysis gets more advanced.
