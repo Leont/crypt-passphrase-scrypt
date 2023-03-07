@@ -1,6 +1,7 @@
 Revision history for Crypt-Passphrase-Scrypt
 
 {{$NEXT}}
+          - Use the secure_compare helper method
 
 0.001     2021-03-08 18:56:13+01:00 Europe/Amsterdam
           Initial release to an unsuspecting world

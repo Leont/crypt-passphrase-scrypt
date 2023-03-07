@@ -46,7 +46,7 @@ sub verify_password {
 	my ($cost, $block_size, $parallel, $salt64, $hash64) = $hash =~ $decode_regex or return 0;
 	my $old_hash = decode_base64($hash64);
 	my $new_hash = scrypt_raw($password, decode_base64($salt64), 1 << $cost, $block_size, $parallel, length $old_hash);
-	return $new_hash eq $old_hash;
+	return $class->secure_compare($new_hash, $old_hash);
 }
 
 1;
