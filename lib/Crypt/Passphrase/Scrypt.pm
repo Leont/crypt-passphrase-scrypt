@@ -8,6 +8,7 @@ use parent 'Crypt::Passphrase::Encoder';
 use Carp 'croak';
 use Crypt::ScryptKDF qw/scrypt_b64 scrypt_raw/;
 use MIME::Base64 qw/encode_base64 decode_base64/;
+our @CARP_NOT = 'Crypt::Passphrase';
 
 sub new {
 	my ($class, %args) = @_;
