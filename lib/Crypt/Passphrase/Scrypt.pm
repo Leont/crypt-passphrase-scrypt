@@ -39,15 +39,63 @@ sub needs_rehash {
 }
 
 sub crypt_subtypes {
-	return 'scrypt';
+	return ('scrypt', '7');
 }
+
+my $base64_digits = './0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
+sub _decode_crypt64 {
+	my $digits = shift;
+	my $ndigits = length($digits);
+	my $npadbytes = 3 - ($ndigits + 3) % 4;
+	$digits .= "." x $npadbytes;
+	my $bytes = "";
+	for(my $i = 0; $i < $ndigits; $i += 4) {
+		my $v = index($base64_digits, substr $digits, $i, 1) |
+			(index($base64_digits, substr $digits, $i + 1, 1) << 6) |
+			(index($base64_digits, substr $digits, $i + 2, 1) << 12) |
+			(index($base64_digits, substr $digits, $i + 3, 1) << 18);
+		$bytes .= chr($v & 0xff) . chr(($v >> 8) & 0xff) . chr(($v >> 16) & 0xff);
+	}
+	substr $bytes, -$npadbytes, $npadbytes, "";
+	return $bytes;
+}
+
+sub _decode_number {
+	my $input = shift;
+	my $result = 0;
+	for (0 .. length($input) - 1) {
+		$result += index($base64_digits, substr $input, $_, 1) * (1 << (6 * $_));
+	}
+	return $result;
+}
+
+my $char64 = qr{[./0-9A-Za-z]};
+my $regex7 = qr/ ^ \$7\$ ($char64) ($char64{5}) ($char64{5}) ([^\$]{22}) \$ ([^\$]*) /x;
 
 sub verify_password {
 	my ($class, $password, $hash) = @_;
-	my ($cost, $block_size, $parallel, $salt64, $hash64) = $hash =~ $decode_regex or return 0;
-	my $old_hash = decode_base64($hash64);
-	my $new_hash = scrypt_raw($password, decode_base64($salt64), 1 << $cost, $block_size, $parallel, length $old_hash);
-	return $class->secure_compare($new_hash, $old_hash);
+	if (my ($cost, $block_size, $parallel, $salt64, $hash64) = $hash =~ $decode_regex) {
+		my $old_hash = decode_base64($hash64);
+		my $new_hash = scrypt_raw($password, decode_base64($salt64), 1 << $cost, $block_size, $parallel, length $old_hash);
+		return $class->secure_compare($new_hash, $old_hash);
+	}
+	elsif (my ($encoded_cost, $encoded_block_size, $encoded_parallel, $salt, $encoded_hash) = $hash =~ $regex7) {
+		my ($cost, $block_size, $parallel) = map { _decode_number($_) } $encoded_cost, $encoded_block_size, $encoded_parallel;
+		my $old_hash = _decode_crypt64($encoded_hash);
+		my $new_hash = scrypt_raw($password, $salt, 1 << $cost, $block_size, $parallel, length $old_hash);
+		return $class->secure_compare($new_hash, $old_hash);
+	}
+	return !!0;
+}
+
+sub recode_hash {
+	my ($self, $hash) = @_;
+	if (my ($encoded_cost, $encoded_block_size, $encoded_parallel, $salt, $encoded_hash) = $hash =~ $regex7) {
+		my ($cost, $block_size, $parallel) = map { _decode_number($_) } $encoded_cost, $encoded_block_size, $encoded_parallel;
+		my $recoded_hash = encode_base64(_decode_crypt64($encoded_hash));
+		return sprintf '$scrypt$ln=%d,r=%d,p=%d$%s$%s', $cost, $block_size, $parallel, encode_base64($salt), $recoded_hash;
+	}
+	return $hash;
 }
 
 1;
@@ -96,7 +144,7 @@ This returns true if the hash uses a different cipher, or if any of the cost is 
 
 =method crypt_types()
 
-This class supports the following crypt type: C<scrypt>
+This class supports the following crypt types: C<scrypt> and C<7>.
 
 =method verify_password($password, $hash)
 
