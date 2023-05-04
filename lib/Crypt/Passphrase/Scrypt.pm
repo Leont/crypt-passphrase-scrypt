@@ -33,9 +33,9 @@ my $decode_regex = qr/ \A \$ scrypt \$ ln=(\d+),r=(\d+),p=(\d+) \$ ([^\$]+) \$ (
 sub needs_rehash {
 	my ($self, $hash) = @_;
 	my ($cost, $block_size, $parallel, $salt64, $hash64) = $hash =~ $decode_regex or return 1;
-	return 1 if $cost < $self->{cost} or $block_size < $self->{block_size} or $parallel < $self->{parallel};
-	return 1 if length decode_base64($salt64) < $self->{salt_size} or length decode_base64($hash64) < $self->{output_size};
-	return 0;
+	return !!1 if $cost != $self->{cost} or $block_size != $self->{block_size} or $parallel != $self->{parallel};
+	return !!1 if length decode_base64($salt64) != $self->{salt_size} or length decode_base64($hash64) != $self->{output_size};
+	return !!0;
 }
 
 sub crypt_subtypes {
