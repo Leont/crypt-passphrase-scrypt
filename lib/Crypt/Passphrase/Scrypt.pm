@@ -17,7 +17,7 @@ sub new {
 		block_size  => $args{block_size}  ||  8,
 		parallel    => $args{parallel}    ||  1,
 		salt_size   => $args{salt_size}   || 16,
-		output_size => $args{output_size} || 16,
+		output_size => $args{output_size} || 32,
 	}, $class;
 }
 
