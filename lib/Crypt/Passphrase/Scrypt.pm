@@ -32,7 +32,7 @@ sub hash_password {
 	my $salt = $self->random_bytes($self->{salt_size});
 	if ($self->{format} eq 'passlib') {
 		my $hash = scrypt_b64($password, $salt, 1 << $self->{cost}, $self->{block_size}, $self->{parallel}, $self->{output_size});
-		return sprintf '$scrypt$ln=%d,r=%d,p=%d$%s$%s', $self->{cost}, $self->{block_size}, $self->{parallel}, encode_base64($salt), $hash;
+		return sprintf '$scrypt$ln=%d,r=%d,p=%d$%s$%s', $self->{cost}, $self->{block_size}, $self->{parallel}, encode_base64($salt, ''), $hash;
 	} else {
 		my $encoded_salt = encode_crypt64($salt);
 		my $hash = scrypt_raw($password, $encoded_salt, 1 << $self->{cost}, $self->{block_size}, $self->{parallel}, $self->{output_size});
@@ -92,8 +92,8 @@ sub recode_hash {
 	if (my ($encoded_cost, $encoded_block_size, $encoded_parallel, $salt, $encoded_hash) = $hash =~ $regex7) {
 		my ($cost, $block_size, $parallel) = map { decode_crypt64_number($_) } $encoded_cost, $encoded_block_size, $encoded_parallel;
 		my $decoded = decode_crypt64($encoded_hash);
-		my $recoded_hash = encode_base64($decoded);
-		return sprintf '$scrypt$ln=%d,r=%d,p=%d$%s$%s', $cost, $block_size, $parallel, encode_base64($salt), $recoded_hash;
+		my $recoded_hash = encode_base64($decoded, '');
+		return sprintf '$scrypt$ln=%d,r=%d,p=%d$%s$%s', $cost, $block_size, $parallel, encode_base64($salt, ''), $recoded_hash;
 	}
 	return $hash;
 }
