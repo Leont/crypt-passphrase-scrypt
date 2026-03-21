@@ -6,71 +6,69 @@ use warnings;
 use parent 'Crypt::Passphrase::Encoder';
 
 use Carp 'croak';
+use Crypt::Passphrase::Util::Crypt64 ':all';
 use Crypt::ScryptKDF qw/scrypt_b64 scrypt_raw/;
 use MIME::Base64 qw/encode_base64 decode_base64/;
 our @CARP_NOT = 'Crypt::Passphrase';
 
 sub new {
 	my ($class, %args) = @_;
+
+	my $format = $args{format} || 'passlib';
+	die "Invalid format $format" unless $format eq 'passlib' or $format eq 'libcrypt';
+
 	return bless {
 		cost        => $args{cost}        || 16,
 		block_size  => $args{block_size}  ||  8,
 		parallel    => $args{parallel}    ||  1,
 		salt_size   => $args{salt_size}   || 16,
 		output_size => $args{output_size} || 32,
+		format      => $format,
 	}, $class;
 }
 
 sub hash_password {
 	my ($self, $password) = @_;
 	my $salt = $self->random_bytes($self->{salt_size});
-	my $hash = scrypt_b64($password, $salt, 1 << $self->{cost}, $self->{block_size}, $self->{parallel}, $self->{output_size});
-	return sprintf '$scrypt$ln=%d,r=%d,p=%d$%s$%s', $self->{cost}, $self->{block_size}, $self->{parallel}, encode_base64($salt), $hash;
+	if ($self->{format} eq 'passlib') {
+		my $hash = scrypt_b64($password, $salt, 1 << $self->{cost}, $self->{block_size}, $self->{parallel}, $self->{output_size});
+		return sprintf '$scrypt$ln=%d,r=%d,p=%d$%s$%s', $self->{cost}, $self->{block_size}, $self->{parallel}, encode_base64($salt), $hash;
+	} else {
+		my $encoded_salt = encode_crypt64($salt);
+		my $hash = scrypt_raw($password, $encoded_salt, 1 << $self->{cost}, $self->{block_size}, $self->{parallel}, $self->{output_size});
+		my $encoded_hash = encode_crypt64($hash);
+
+		my $cost = encode_crypt64_number($self->{cost}, 1);
+		my $block_size = encode_crypt64_number($self->{block_size}, 5);
+		my $parallel = encode_crypt64_number($self->{parallel}, 5);
+		my $header = join '', $cost, $block_size, $parallel, $encoded_salt;
+
+		return sprintf '$7$%s$%s', $header, $encoded_hash;
+	}
 }
 
 my $decode_regex = qr/ \A \$ scrypt \$ ln=(\d+),r=(\d+),p=(\d+) \$ ([^\$]+) \$ ([^\$]*) \z /x;
+my $char64 = qr{[./0-9A-Za-z]};
+my $regex7 = qr/ ^ \$7\$ ($char64) ($char64{5}) ($char64{5}) ([^\$]{22}) \$ ([^\$]*) /x;
 
 sub needs_rehash {
 	my ($self, $hash) = @_;
-	my ($cost, $block_size, $parallel, $salt64, $hash64) = $hash =~ $decode_regex or return 1;
-	return !!1 if $cost != $self->{cost} or $block_size != $self->{block_size} or $parallel != $self->{parallel};
-	return !!1 if length decode_base64($salt64) != $self->{salt_size} or length decode_base64($hash64) != $self->{output_size};
+	if ($self->{format} eq 'passlib') {
+		my ($cost, $block_size, $parallel, $salt64, $hash64) = $hash =~ $decode_regex or return 1;
+		return !!1 if $cost != $self->{cost} or $block_size != $self->{block_size} or $parallel != $self->{parallel};
+		return !!1 if length decode_base64($salt64) != $self->{salt_size} or length decode_base64($hash64) != $self->{output_size};
+	} else {
+		my ($encoded_cost, $encoded_block_size, $encoded_parallel, $salt, $encoded_hash) = $hash =~ $regex7 or return 1;
+		my ($cost, $block_size, $parallel) = map { decode_crypt64_number($_) } $encoded_cost, $encoded_block_size, $encoded_parallel;
+		return !!1 if $cost != $self->{cost} or $block_size != $self->{block_size} or $parallel != $self->{parallel};
+		return !!1 if length decode_crypt64($salt) != $self->{salt_size} or length decode_crypt64($encoded_hash) != $self->{output_size};
+	}
 	return !!0;
 }
 
 sub crypt_subtypes {
 	return ('scrypt', '7');
 }
-
-my $base64_digits = './0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
-sub _decode_crypt64 {
-	my $digits = shift;
-	my $ndigits = length($digits);
-	my $npadbytes = 3 - ($ndigits + 3) % 4;
-	$digits .= "." x $npadbytes;
-	my $bytes = "";
-	for(my $i = 0; $i < $ndigits; $i += 4) {
-		my $v = index($base64_digits, substr $digits, $i, 1) |
-			(index($base64_digits, substr $digits, $i + 1, 1) << 6) |
-			(index($base64_digits, substr $digits, $i + 2, 1) << 12) |
-			(index($base64_digits, substr $digits, $i + 3, 1) << 18);
-		$bytes .= chr($v & 0xff) . chr(($v >> 8) & 0xff) . chr(($v >> 16) & 0xff);
-	}
-	substr $bytes, -$npadbytes, $npadbytes, "";
-	return $bytes;
-}
-
-sub _decode_number {
-	my $input = shift;
-	my $result = 0;
-	for (0 .. length($input) - 1) {
-		$result += index($base64_digits, substr $input, $_, 1) * (1 << (6 * $_));
-	}
-	return $result;
-}
-
-my $char64 = qr{[./0-9A-Za-z]};
-my $regex7 = qr/ ^ \$7\$ ($char64) ($char64{5}) ($char64{5}) ([^\$]{22}) \$ ([^\$]*) /x;
 
 sub verify_password {
 	my ($class, $password, $hash) = @_;
@@ -80,8 +78,8 @@ sub verify_password {
 		return $class->secure_compare($new_hash, $old_hash);
 	}
 	elsif (my ($encoded_cost, $encoded_block_size, $encoded_parallel, $salt, $encoded_hash) = $hash =~ $regex7) {
-		my ($cost, $block_size, $parallel) = map { _decode_number($_) } $encoded_cost, $encoded_block_size, $encoded_parallel;
-		my $old_hash = _decode_crypt64($encoded_hash);
+		my ($cost, $block_size, $parallel) = map { decode_crypt64_number($_) } $encoded_cost, $encoded_block_size, $encoded_parallel;
+		my $old_hash = decode_crypt64($encoded_hash);
 		my $new_hash = scrypt_raw($password, $salt, 1 << $cost, $block_size, $parallel, length $old_hash);
 		return $class->secure_compare($new_hash, $old_hash);
 	}
@@ -90,9 +88,11 @@ sub verify_password {
 
 sub recode_hash {
 	my ($self, $hash) = @_;
+	return $hash if $self->{format} eq 'libcrypt';
 	if (my ($encoded_cost, $encoded_block_size, $encoded_parallel, $salt, $encoded_hash) = $hash =~ $regex7) {
-		my ($cost, $block_size, $parallel) = map { _decode_number($_) } $encoded_cost, $encoded_block_size, $encoded_parallel;
-		my $recoded_hash = encode_base64(_decode_crypt64($encoded_hash));
+		my ($cost, $block_size, $parallel) = map { decode_crypt64_number($_) } $encoded_cost, $encoded_block_size, $encoded_parallel;
+		my $decoded = decode_crypt64($encoded_hash);
+		my $recoded_hash = encode_base64($decoded);
 		return sprintf '$scrypt$ln=%d,r=%d,p=%d$%s$%s', $cost, $block_size, $parallel, encode_base64($salt), $recoded_hash;
 	}
 	return $hash;
@@ -111,6 +111,10 @@ This class implements an scrypt encoder for Crypt::Passphrase. If one wants a me
 This creates a new scrypt encoder, it takes named parameters that are all optional. Note that some defaults are likely to change at some point in the future, as computers get progressively more powerful and cryptoanalysis gets more advanced.
 
 =over 4
+
+=item * format
+
+This module supports formats: C<passlib> (C<$scrypt$>) and C<libcrypt> (C<$7>), with the former being the default.
 
 =item * cost
 

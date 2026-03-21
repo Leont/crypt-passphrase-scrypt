@@ -1,6 +1,7 @@
 Revision history for Crypt-Passphrase-Scrypt
 
 {{$NEXT}}
+          - Add support for libcrypt hash format
 
 0.004     2023-05-04 17:34:07+02:00 Europe/Amsterdam
           - Increase default output size to 32 bytes
