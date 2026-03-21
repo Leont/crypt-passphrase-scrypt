@@ -102,54 +102,55 @@ sub recode_hash {
 
 #ABSTRACT: A scrypt encoder for Crypt::Passphrase
 
+=head1 SYNOPSIS
+ my $passphrase = Crypt::Passphrase->new(
+   encoder => {
+     module      => 'Scrypt',
+       format      => 'passlib',
+       cost        => 16,
+       parallelism =>  1,
+       output_size => 32,
+   },
+ );
+
 =head1 DESCRIPTION
 
 This class implements an scrypt encoder for Crypt::Passphrase. If one wants a memory-hard password scheme Argon2 is recommended instead.
 
-=method new(%args)
+=head2 Configuration.
 
-This creates a new scrypt encoder, it takes named parameters that are all optional. Note that some defaults are likely to change at some point in the future, as computers get progressively more powerful and cryptoanalysis gets more advanced.
+It takes the following arguments
 
 =over 4
 
 =item * format
 
-This module supports formats: C<passlib> (C<$scrypt$>) and C<libcrypt> (C<$7>), with the former being the default.
+This module supports formats: B<passlib> (C<$scrypt$>) and B<libcrypt> (C<$7>), with the former being the default.
 
 =item * cost
 
-This is the cost factor that is used to hash passwords, it scales exponentially. It currently defaults to C<16>, but this may change in any future version.
+This is the cost factor that is used to hash passwords, it scales exponentially. It currently defaults to B<16>, but this may change in any future version. Note that unlike many hash algorithms, increasing the rounds value will increase both the time and memory required to hash a password.
 
 =item * block_size
 
-This defaults to 8, you probably have no need for changing this.
+This defaults to B<8>.
 
 =item * parallelism
 
-The number of threads used for the hash. This defaults to C<1>, but this number may change in any future version.
+The number of threads used for the hash. This defaults to B<1>, but this number may change in any future version.
 
 =item * output_size
 
-The size of a hashed value. This defaults to 16 bytes, increasing it only makes sense if your passwords actually contain more than 128 bits of entropy.
+The size of a hashed value. This defaults to B<32> bytes.
 
 =item * salt_size
 
-The size of the salt. This defaults to 16 bytes, which should be more than enough for any use-case.
+The size of the salt. This defaults to B<16> bytes, which should be more than enough for any use-case.
 
 =back
 
-=method hash_password($password)
+Note that some defaults are likely to change at some point in the future, as computers get progressively more powerful and cryptoanalysis gets more advanced.
 
-This hashes the passwords with scrypt according to the specified settings and a random salt (and will thus return a different result each time).
+=head2 Supported crypt types
 
-=method needs_rehash($hash)
-
-This returns true if the hash uses a different cipher, or if any of the cost is lower that desired by the encoder.
-
-=method crypt_types()
-
-This class supports the following crypt types: C<scrypt> and C<7>.
-
-=method verify_password($password, $hash)
-
-This will check if a password matches a scrypt hash.
+This class supports the following crypt types: C<scrypt> and C<7>, matching the C<passlib> and C<libcrypt> formats.
