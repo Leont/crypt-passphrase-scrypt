@@ -14,15 +14,15 @@ our @CARP_NOT = 'Crypt::Passphrase';
 sub new {
 	my ($class, %args) = @_;
 
-	my $format = $args{format} || 'passlib';
+	my $format = $args{format} // 'passlib';
 	die "Invalid format $format" unless $format eq 'passlib' or $format eq 'libcrypt';
 
 	return bless {
-		cost        => $args{cost}        || 16,
-		block_size  => $args{block_size}  ||  8,
-		parallel    => $args{parallel}    ||  1,
-		salt_size   => $args{salt_size}   || 16,
-		output_size => $args{output_size} || 32,
+		cost        => $args{cost}        // 16,
+		block_size  => $args{block_size}  //  8,
+		parallel    => $args{parallel}    //  1,
+		salt_size   => $args{salt_size}   // 16,
+		output_size => $args{output_size} // 32,
 		format      => $format,
 	}, $class;
 }
